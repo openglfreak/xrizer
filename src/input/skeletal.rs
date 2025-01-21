@@ -611,7 +611,7 @@ impl SkeletalInputActionData {
         debug!("creating skeletal input actions");
         let leftright = [left_hand, right_hand];
         let set = instance
-            .create_action_set("xrizer-skeletal-input", "XRizer Skeletal Input", 0)
+            .create_action_set("xrizer-skeletal-input", "XRizer Skeletal Input", 0x7fffffffu32)
             .unwrap();
         let thumb_touch = set
             .create_action("thumb-touch", "Thumb Touch", &leftright)
