@@ -203,11 +203,12 @@ impl<C: openxr_data::Compositor> Input<C> {
         *self.skeletal_tracking_level.write().unwrap() = vr::EVRSkeletalTrackingLevel::Estimated;
     }
 
-    fn get_finger_state(&self, session_data: &SessionData, hand: Hand) -> FingerState {
-        // Determines the speed at which fingers follow the input states
-        // This value seems to feel right for both analog inputs and binary ones (like vive wands)
-        const FINGER_SMOOTHING_SPEED: f32 = 24.0;
+    pub(super) fn update_finger_states(&self, session_data: &SessionData) {
+        self.update_finger_state(session_data, Hand::Left);
+        self.update_finger_state(session_data, Hand::Right);
+    }
 
+    fn update_finger_state(&self, session_data: &SessionData, hand: Hand) {
         let actions = &session_data
             .input_data
             .estimated_skeleton_actions
@@ -240,9 +241,30 @@ impl<C: openxr_data::Compositor> Input<C> {
             .unwrap()
             .current_state;
 
-        let index = index_curl.max(
+        let mut state = self.skeleton_actions_state[hand as usize - 1]
+            .lock()
+            .unwrap();
+
+        *state = SkeletonActionsState {
+            thumb_touch,
+            index_touch,
+            index_curl,
+            rest_curl,
+        };
+    }
+
+    fn get_finger_state(&self, session_data: &SessionData, hand: Hand) -> FingerState {
+        // Determines the speed at which fingers follow the input states
+        // This value seems to feel right for both analog inputs and binary ones (like vive wands)
+        const FINGER_SMOOTHING_SPEED: f32 = 24.0;
+
+        let actions_state = *self.skeleton_actions_state[hand as usize - 1]
+            .lock()
+            .unwrap();
+
+        let index = actions_state.index_curl.max(
             // Curl the index finger slightly on touch input
-            if index_touch || index_curl > 0.0 {
+            if actions_state.index_touch || actions_state.index_curl > 0.0 {
                 0.3
             } else {
                 0.0
@@ -258,10 +280,10 @@ impl<C: openxr_data::Compositor> Input<C> {
         let target = FingerState {
             index,
             // Make other fingers curl with the index slightly to mimic how real human hands work
-            middle: rest_curl.max(index / 2.0),
-            ring: rest_curl.max(index / 4.0),
-            pinky: rest_curl.max(index / 6.0),
-            thumb: if thumb_touch { 1.0 } else { 0.0 },
+            middle: actions_state.rest_curl.max(index / 2.0),
+            ring: actions_state.rest_curl.max(index / 4.0),
+            pinky: actions_state.rest_curl.max(index / 6.0),
+            thumb: if actions_state.thumb_touch { 1.0 } else { 0.0 },
             time: current_time,
         };
 
@@ -425,6 +447,25 @@ static AUX_BONES: &[(HandSkeletonBone, xr::HandJoint)] = &[
     (AuxRingFinger, xr::HandJoint::RING_DISTAL),
     (AuxPinkyFinger, xr::HandJoint::LITTLE_DISTAL),
 ];
+
+#[derive(Copy, Clone)]
+pub(super) struct SkeletonActionsState {
+    thumb_touch: bool,
+    index_touch: bool,
+    index_curl: f32,
+    rest_curl: f32,
+}
+
+impl SkeletonActionsState {
+    pub fn new() -> SkeletonActionsState {
+        SkeletonActionsState {
+            thumb_touch: false,
+            index_touch: false,
+            index_curl: 0.0,
+            rest_curl: 0.0,
+        }
+    }
+}
 
 #[derive(Copy, Clone)]
 pub(super) struct FingerState {

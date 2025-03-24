@@ -9,6 +9,7 @@ mod tests;
 
 use profiles::MainAxisType;
 pub use profiles::{InteractionProfile, Profiles};
+use skeletal::SkeletonActionsState;
 use skeletal::FingerState;
 use skeletal::SkeletalInputActionData;
 
@@ -51,6 +52,7 @@ pub struct Input<C: openxr_data::Compositor> {
     legacy_state: legacy::LegacyState,
     skeletal_tracking_level: RwLock<vr::EVRSkeletalTrackingLevel>,
     profile_map: HashMap<xr::Path, &'static profiles::ProfileProperties>,
+    skeleton_actions_state: [Mutex<SkeletonActionsState>; 2],
     estimated_finger_state: [Mutex<FingerState>; 2],
     events: Mutex<VecDeque<InputEvent>>,
 }
@@ -120,6 +122,10 @@ impl<C: openxr_data::Compositor> Input<C> {
             legacy_state: Default::default(),
             skeletal_tracking_level: RwLock::new(vr::EVRSkeletalTrackingLevel::Estimated),
             profile_map,
+            skeleton_actions_state: [
+                Mutex::new(SkeletonActionsState::new()),
+                Mutex::new(SkeletonActionsState::new()),
+            ],
             estimated_finger_state: [
                 Mutex::new(FingerState::new()),
                 Mutex::new(FingerState::new()),
@@ -990,9 +996,7 @@ impl<C: openxr_data::Compositor> vr::IVRInput010_Interface for Input<C> {
             }
 
             let legacy = data.input_data.legacy_actions.get().unwrap();
-            let skeletal_input = data.input_data.estimated_skeleton_actions.get().unwrap();
             sync_sets.push(xr::ActiveActionSet::new(&legacy.set));
-            sync_sets.push(xr::ActiveActionSet::new(&skeletal_input.set));
             self.legacy_state.on_action_sync();
         }
 
@@ -1214,6 +1218,14 @@ impl<C: openxr_data::Compositor> Input<C> {
                     .unwrap();
             }
             return;
+        }
+
+        if let Some(actions) = data.input_data.estimated_skeleton_actions.get() {
+            data.session
+                .sync_actions(&[xr::ActiveActionSet::new(&actions.set)])
+                .unwrap();
+
+            self.update_finger_states(data.session);
         }
 
         match data.input_data.legacy_actions.get() {
