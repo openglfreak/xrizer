@@ -394,7 +394,7 @@ impl TrackedDeviceList {
             .retain(|device| device.get_type() != TrackedDeviceType::GenericTracker);
 
         let max_generic_trackers = vr::k_unMaxTrackedDeviceCount as usize - self.devices.len();
-        log::info!("Creating generic trackers");
+        log::trace!("Creating generic trackers");
 
         let session = xr_data.session_data.get();
 
@@ -402,10 +402,17 @@ impl TrackedDeviceList {
             .enumerate_xdevs(&session.session, max_generic_trackers)?
             .into_iter()
             .filter(|device| {
+                !self.devices.iter().any(|x| if let Some(xdev) = &x.xdev { xdev == device } else { false })
+            })
+            .filter(|device| {
                 device.space.is_some()
                     && device.properties.name().to_lowercase().contains("tracker")
             })
             .collect();
+
+        if xdevs.is_empty() {
+            return Ok(())
+        }
 
         log::info!("Found {} generic trackers", xdevs.len());
 

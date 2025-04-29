@@ -59,12 +59,12 @@ impl XdevSpaceExtension {
         let mut xdev_ids = vec![0; max_generic_trackers];
         let mut xdev_id_count = 0;
 
-        log::info!("Create XDev List");
+        log::trace!("Create XDev List");
 
         self.xr_mndx_xdev_space
             .create_xdev_list(session.as_raw(), &create_info, &mut xdev_list)?;
 
-        log::info!("Enumerate XDevs");
+        log::trace!("Enumerate XDevs");
 
         self.xr_mndx_xdev_space.enumerate_xdevs(
             xdev_list,
