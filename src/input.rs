@@ -971,6 +971,20 @@ impl<C: openxr_data::Compositor> vr::IVRInput010_Interface for Input<C> {
             }
         }
 
+        // Workaround for gestures not working in VRChat with newer vive controllers due to
+        // the trigger never reading exactly zero.
+        {
+            let key = ActionKey::from(KeyData::from_ffi(handle));
+            let guard = self.action_map.read().unwrap();
+            if let Some(action) = guard.get(key) {
+                if action.path.contains("gesture_wheel_cancel_left") ||
+                        action.path.contains("gesture_wheel_cancel_right") {
+
+                    state.current_state = false;
+                }
+            }
+        }
+
         *out.value = vr::InputDigitalActionData_t {
             bActive: state.is_active,
             bState: state.current_state,
